@@ -24,7 +24,6 @@ private val logger = KotlinLogging.logger {}
 
 private data class ClientRequestInfo(
     val id: Id,
-    val sendingTimeMs: Long,
     val client: Client<BusinessRequest>,
     val iRequest: Int,
 )
@@ -54,11 +53,12 @@ fun runBench(
         }
     }
     val requestInfos = ConcurrentHashMap<Id, ClientRequestInfo>()
+    val clientsFirstRequestTimeMs = mutableMapOf<Client<*>, Long>()
 
     fun send(client: Client<BusinessRequest>, iRequest: Int = 0) {
         val id = Id.random()
         val request = BusinessRequest(id, array)
-        requestInfos[id] = ClientRequestInfo(id, System.currentTimeMillis(), client, iRequest)
+        requestInfos[id] = ClientRequestInfo(id, client, iRequest)
         client.sendRequest(request)
     }
 
@@ -66,20 +66,25 @@ fun runBench(
     val clients = List(runConf.nClients) {
         runConf.arch.clientFactory.create(conf.endpoint) { response ->
             val info = requestInfos.getValue(response.id)
-            val elapsed = (System.currentTimeMillis() - info.sendingTimeMs).toDuration(DurationUnit.MILLISECONDS)
-            metrics.log(MetricTag.ClientSingleResponseTime, elapsed)
             if (info.iRequest < runConf.nRequestsPerClient) {
                 launch {
                     delay(runConf.clientResponseRequestDelay)
                     send(info.client, info.iRequest + 1)
                 }
             } else {
+                val start = clientsFirstRequestTimeMs.getValue(info.client)
+                val elapsed = (System.currentTimeMillis() - start).toDuration(DurationUnit.MILLISECONDS)
+                val corrected = elapsed - runConf.clientResponseRequestDelay * (runConf.nRequestsPerClient - 1)
+                metrics.log(MetricTag.ClientSingleResponseTime, corrected / runConf.nRequestsPerClient)
                 latch.countDown()
             }
         }
     }
     server.start()
-    clients.forEach { client -> send(client) }
+    clients.forEach { client ->
+        clientsFirstRequestTimeMs[client] = System.currentTimeMillis()
+        send(client)
+    }
 
     latch.await()
     withContext(Dispatchers.IO) { server.close() }

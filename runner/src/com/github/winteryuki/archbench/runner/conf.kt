@@ -10,6 +10,8 @@ import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingServer
 import com.github.winteryuki.archbench.lib.Endpoint
 import com.github.winteryuki.archbench.lib.IpAddress
 import com.github.winteryuki.archbench.lib.Port
+import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.time.Duration
 
 data class Conf(
@@ -17,6 +19,7 @@ data class Conf(
     val nClientsValues: List<Int>,
     val clientResponseRequestDelayValues: List<Duration>,
     val nRequestsPerClientValues: List<Int>,
+    val plotsPath: Path = Paths.get("").toAbsolutePath(),
     val port: Port = Port(8082),
     val endpoint: Endpoint = Endpoint(IpAddress.localhost, port),
     val nServerWorkerThreads: Int = Runtime.getRuntime().availableProcessors() - 1,
