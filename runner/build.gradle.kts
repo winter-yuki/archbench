@@ -9,5 +9,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.github.winteryuki.archtest.runner.MainKt")
+    mainClass.set("com.github.winteryuki.archbench.runner.MainKt")
 }

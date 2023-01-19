@@ -4,7 +4,7 @@ plugins {
     kotlin("plugin.serialization") version "1.7.21" apply false
 }
 
-group = "com.github.winteryuki.archtest"
+group = "com.github.winteryuki.archbench"
 version = "1.0-SNAPSHOT"
 
 subprojects {
