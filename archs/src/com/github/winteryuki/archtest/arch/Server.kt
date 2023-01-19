@@ -2,6 +2,7 @@ package com.github.winteryuki.archtest.arch
 
 import com.github.winteryuki.archtest.lib.IpAddress
 import java.io.Closeable
+import kotlin.time.Duration
 
 interface Server : Closeable {
     fun start()
@@ -20,4 +21,16 @@ fun interface ServerRequestHandler<in Request, out Response> {
         request: Request,
         responseHandler: ResponseHandler<Response>
     )
+}
+
+interface ServerTimeLogger {
+    fun logRequestProcessingDuration(duration: Duration)
+
+    companion object {
+        private val empty = object : ServerTimeLogger {
+            override fun logRequestProcessingDuration(duration: Duration) = Unit
+        }
+
+        operator fun invoke(): ServerTimeLogger = empty
+    }
 }

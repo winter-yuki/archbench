@@ -22,7 +22,8 @@ class SimpleBlockingClient<Request, Response>(
     private val responseDeserializer: DeserializationStrategy<Response>,
     private val handler: ClientResponseHandler<Response>
 ) : Client<Request> {
-    private val socket = endpoint.toSocket()
+    private val lazySocket = lazy { endpoint.toSocket() } // Postpone connection establishment until first request
+    private val socket by lazySocket
     private val readPool = Executors.newSingleThreadExecutor()
     private val writePool = Executors.newSingleThreadExecutor()
 
@@ -46,7 +47,9 @@ class SimpleBlockingClient<Request, Response>(
     override fun close() {
         readPool.shutdown()
         writePool.shutdown()
-        socket.close()
+        if (lazySocket.isInitialized()) {
+            socket.close()
+        }
     }
 
     companion object : KLoggable {

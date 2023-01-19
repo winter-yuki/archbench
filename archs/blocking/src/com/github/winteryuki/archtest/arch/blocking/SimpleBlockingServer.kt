@@ -2,6 +2,7 @@ package com.github.winteryuki.archtest.arch.blocking
 
 import com.github.winteryuki.archtest.arch.Server
 import com.github.winteryuki.archtest.arch.ServerRequestHandler
+import com.github.winteryuki.archtest.arch.ServerTimeLogger
 import com.github.winteryuki.archtest.lib.Port
 import com.github.winteryuki.archtest.lib.decodeDelimitedFromStream
 import com.github.winteryuki.archtest.lib.encodeDelimitedToStream
@@ -20,11 +21,14 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 class SimpleBlockingServer<Request, Response>(
     port: Port,
     private val requestDeserializer: DeserializationStrategy<Request>,
     private val responseSerializer: SerializationStrategy<Response>,
+    private val timeLogger: ServerTimeLogger = ServerTimeLogger(),
     private val requestHandler: ServerRequestHandler<Request, Response>
 ) : Server {
     private val connectionsPool = Executors.newCachedThreadPool()
@@ -45,7 +49,9 @@ class SimpleBlockingServer<Request, Response>(
                 logger.info { "Accepting clients" }
                 val socket = serverSocket.accept()
                 logger.info { "Client accepted" }
-                connectionsPool.submit(Worker(socket, requestDeserializer, responseSerializer, requestHandler))
+                val worker =
+                    Worker(socket, requestDeserializer, responseSerializer, timeLogger, requestHandler)
+                connectionsPool.submit(worker)
             } catch (e: SocketException) {
                 if (serverSocket.isClosed) break
                 logger.error(e) { "Server exception" }
@@ -73,8 +79,9 @@ class SimpleBlockingServer<Request, Response>(
 
         inline operator fun <reified Request, reified Response> invoke(
             port: Port,
+            timeLogger: ServerTimeLogger = ServerTimeLogger(),
             requestHandler: ServerRequestHandler<Request, Response>
-        ) = SimpleBlockingServer(port, serializer(), serializer(), requestHandler)
+        ) = SimpleBlockingServer(port, serializer(), serializer(), timeLogger, requestHandler)
     }
 }
 
@@ -82,10 +89,12 @@ private class Worker<Request, Response>(
     private val socket: Socket,
     private val requestDeserializer: DeserializationStrategy<Request>,
     private val responseSerializer: SerializationStrategy<Response>,
+    private val timeLogger: ServerTimeLogger,
     private val requestHandler: ServerRequestHandler<Request, Response>
 ) : Runnable {
     private val writePool = Executors.newSingleThreadExecutor()
 
+    @Suppress("UnnecessaryOptInAnnotation")
     @OptIn(ExperimentalSerializationApi::class)
     override fun run(): Unit = socket.use(onFinally = { writePool.shutdown() }) { socket ->
         logger.info { "Client connected" }
@@ -95,7 +104,10 @@ private class Worker<Request, Response>(
                 logger.info { "Request received" }
                 val ctx = ServerRequestHandler.HandlingContext(clientIp = socket.inetAddress.ip)
                 with(requestHandler) {
+                    val handlingTimeStart = System.currentTimeMillis()
                     ctx.handleRequest(request) { response ->
+                        val handlingTimeElapsed = System.currentTimeMillis() - handlingTimeStart
+                        timeLogger.logRequestProcessingDuration(handlingTimeElapsed.toDuration(DurationUnit.MILLISECONDS))
                         writePool.submitCatching(onException = { logger.error(it) { "Failed sending response" } }) {
                             ProtoBuf.encodeDelimitedToStream(responseSerializer, response, socket.getOutputStream())
                         }

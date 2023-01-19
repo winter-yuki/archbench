@@ -1,5 +1,9 @@
 package com.github.winteryuki.archtest.lib
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import java.io.Closeable
 
 inline fun <T : Closeable, R> T.use(onFinally: () -> Unit, block: (T) -> R): R =
@@ -18,5 +22,20 @@ fun IntArray.sortSlowly() {
                 set(j + 1, tmp)
             }
         }
+    }
+}
+
+class Latch(n: Int) {
+    private val channel = Channel<Unit>(capacity = n)
+    private val job = CoroutineScope(Dispatchers.Default).launch {
+        repeat(n) { channel.receive() }
+    }
+
+    suspend fun await() {
+        job.join()
+    }
+
+    fun countDown() {
+        channel.trySend(Unit)
     }
 }
