@@ -34,7 +34,6 @@ object IdSerializer : KSerializer<Id> {
     }
 }
 
-
 @Serializable
 data class BusinessRequest(val id: Id, val array: IntArray)
 

@@ -20,6 +20,7 @@ subprojects {
 
     dependencies {
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.4.1")
         implementation("org.slf4j:slf4j-api:2.0.3")
         implementation("org.slf4j:slf4j-simple:2.0.3")
