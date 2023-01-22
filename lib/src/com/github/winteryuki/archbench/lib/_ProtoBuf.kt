@@ -44,6 +44,16 @@ inline fun <reified T> ProtoBuf.Default.encodeDelimitedToStream(value: T, stream
 }
 
 @OptIn(ExperimentalSerializationApi::class)
+fun <T> ProtoBuf.Default.encodeDelimitedToBuffer(serializer: SerializationStrategy<T>, value: T): ByteBuffer {
+    val data = ProtoBuf.encodeToByteArray(serializer, value)
+    return ByteBuffer.allocate(Int.SIZE_BYTES + data.size).apply {
+        putInt(data.size)
+        put(ByteBuffer.wrap(data))
+        flip()
+    }
+}
+
+@OptIn(ExperimentalSerializationApi::class)
 fun <T> ProtoBuf.Default.decodeFromStream(deserializer: DeserializationStrategy<T>, stream: InputStream): T =
     decodeFromByteArray(deserializer, stream.readAllBytes())
 

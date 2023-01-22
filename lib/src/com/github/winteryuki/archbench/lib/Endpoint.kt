@@ -2,6 +2,7 @@ package com.github.winteryuki.archbench.lib
 
 import kotlinx.serialization.Serializable
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.Socket
 
 @Serializable
@@ -19,6 +20,9 @@ value class Port(val v: Int) {
     }
 }
 
+val Port.inetSocketAddress: InetSocketAddress
+    get() = InetSocketAddress(v)
+
 @Serializable
 @JvmInline
 value class IpAddress(val v: String) {
@@ -29,6 +33,9 @@ value class IpAddress(val v: String) {
     override fun toString(): String = v
 
     companion object {
+        operator fun invoke(address: InetSocketAddress): IpAddress =
+            IpAddress(address.address.hostAddress)
+
         fun check(ip: String): Boolean {
             if (ip == "localhost") return true
             val nums = ip.split('.')
@@ -58,3 +65,6 @@ data class Endpoint(val ip: IpAddress, val port: Port) {
 }
 
 fun Endpoint.toSocket(): Socket = Socket(ip.v, port.v)
+
+val Endpoint.inetSocketAddress: InetSocketAddress
+    get() = InetSocketAddress(ip.v, port.v)

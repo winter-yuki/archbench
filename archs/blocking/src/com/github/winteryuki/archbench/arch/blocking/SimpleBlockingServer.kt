@@ -1,6 +1,6 @@
 package com.github.winteryuki.archbench.arch.blocking
 
-import com.github.winteryuki.archbench.arch.Server
+import com.github.winteryuki.archbench.arch.AbstractServer
 import com.github.winteryuki.archbench.arch.ServerRequestHandler
 import com.github.winteryuki.archbench.arch.ServerTimeLogger
 import com.github.winteryuki.archbench.lib.Port
@@ -20,7 +20,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -30,20 +29,11 @@ class SimpleBlockingServer<Request, Response>(
     private val responseSerializer: SerializationStrategy<Response>,
     private val timeLogger: ServerTimeLogger = ServerTimeLogger(),
     private val requestHandler: ServerRequestHandler<Request, Response>
-) : Server {
+) : AbstractServer(SimpleBlockingServer::class) {
     private val connectionsPool = Executors.newCachedThreadPool()
     private val serverSocket = ServerSocket(port.v)
-    private var serverThread: Thread? = null
-    private val id = nRunners.getAndIncrement()
 
-    override fun start() {
-        serverThread?.let { error("Unable to start server $id twice") }
-        logger.info { "Starting server $id" }
-        serverThread = Thread(::run, "${SimpleBlockingServer::class.simpleName}-$id")
-        serverThread?.start()
-    }
-
-    private fun run() = serverSocket.use { serverSocket ->
+    override fun run() = serverSocket.use { serverSocket ->
         while (!serverSocket.isClosed && !Thread.currentThread().isInterrupted) {
             try {
                 logger.info { "Accepting clients" }
@@ -61,20 +51,13 @@ class SimpleBlockingServer<Request, Response>(
         }
     }
 
-    override fun awaitTermination() {
-        logger.info { "Awaiting termination of server $id" }
-        serverThread?.join()
-    }
-
     override fun close() {
-        logger.info { "Closing server $id" }
-        serverThread?.interrupt()
+        super.close()
         connectionsPool.shutdown()
         serverSocket.close()
     }
 
     companion object : KLoggable {
-        private val nRunners = AtomicInteger(0)
         override val logger = logger()
 
         inline operator fun <reified Request, reified Response> invoke(

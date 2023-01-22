@@ -5,6 +5,8 @@ import com.github.winteryuki.archbench.arch.ClientResponseHandler
 import com.github.winteryuki.archbench.arch.Server
 import com.github.winteryuki.archbench.arch.ServerRequestHandler
 import com.github.winteryuki.archbench.arch.ServerTimeLogger
+import com.github.winteryuki.archbench.arch.async.SimpleAsyncClient
+import com.github.winteryuki.archbench.arch.async.SimpleAsyncServer
 import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingClient
 import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingServer
 import com.github.winteryuki.archbench.lib.Endpoint
@@ -42,13 +44,13 @@ fun interface ClientFactory {
 
 enum class Arch(val serverFactory: ServerFactory, val clientFactory: ClientFactory) {
     Blocking(
-        { port, serverTimeLogger, serverRequestHandler ->
-            SimpleBlockingServer(port, serverTimeLogger, serverRequestHandler)
-        },
-        { endpoint, clientResponseHandler ->
-            SimpleBlockingClient(endpoint, clientResponseHandler)
-        }
-    )
+        SimpleBlockingServer.Companion::invoke,
+        SimpleBlockingClient.Companion::invoke,
+    ),
+    Async(
+        SimpleAsyncServer.Companion::invoke,
+        SimpleAsyncClient.Companion::invoke,
+    ),
 }
 
 /**
@@ -93,6 +95,7 @@ fun runBench(conf: RunConf): MetricsStorage = runBlocking {
     val pool = Executors.newFixedThreadPool(conf.nServerWorkerThreads)
     val server = conf.arch.serverFactory.create(conf.endpoint.port, timeLogger) { request, responseHandler ->
         pool.submitCatching({ e -> logger.error(e) {} }) {
+            logger.info { "Processing request (size=${request.array.size})" }
             val time = measureTime {
                 request.array.sortSlowly()
                 val response = BusinessResponse(request.id, request.array)
@@ -114,6 +117,7 @@ fun runBench(conf: RunConf): MetricsStorage = runBlocking {
     val latch = Latch(conf.nClients)
     val clients = List(conf.nClients) {
         conf.arch.clientFactory.create(conf.endpoint) { response ->
+            logger.info { "Response received (size=${response.array.size})" }
             val info = requestInfos.getValue(response.id)
             if (info.iRequest < conf.nRequestsPerClient) {
                 launch {

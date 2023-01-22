@@ -39,3 +39,16 @@ class Latch(n: Int) {
         channel.trySend(Unit)
     }
 }
+
+fun closeMany(vararg resources: Closeable?) {
+    closeAll(resources.toList())
+}
+
+fun closeAll(resources: Collection<Closeable?>) {
+    val indexed = resources.toList()
+    fun close(i: Int) {
+        if (i !in indexed.indices) return
+        indexed[i].use { close(i + 1) }
+    }
+    close(0)
+}

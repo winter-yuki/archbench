@@ -3,6 +3,8 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/archbench.app.main.iml" filepath="$PROJECT_DIR$/.idea/modules/app/archbench.app.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/archs/async/archbench.archs.async.main.iml" filepath="$PROJECT_DIR$/.idea/modules/archs/async/archbench.archs.async.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/archs/async/archbench.archs.async.test.iml" filepath="$PROJECT_DIR$/.idea/modules/archs/async/archbench.archs.async.test.iml" />
     </modules>
   </component>
 </project>
