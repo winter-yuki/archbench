@@ -5,6 +5,10 @@ import com.github.winteryuki.archbench.lib.IpAddress
 import com.github.winteryuki.archbench.lib.Port
 import kotlin.time.Duration
 
+interface Experiment<Param> : Collection<Pair<Param, (Arch) -> RunConf>>
+
+abstract class AbstractExperiment<Param> : AbstractCollection<Pair<Param, (Arch) -> RunConf>>(), Experiment<Param>
+
 data class ExperimentConf(
     val endpoint: Endpoint = Endpoint(IpAddress.localhost, Port(8082)),
     val nServerWorkerThreads: Int = Runtime.getRuntime().availableProcessors() - 1,
@@ -20,7 +24,7 @@ data class NElementsExperiment(
     val clientResponseRequestDelay: Duration,
     val nRequestsPerClient: Int,
     val conf: ExperimentConf,
-) : AbstractCollection<Pair<Int, (Arch) -> RunConf>>() {
+) : AbstractExperiment<Int>() {
     override val size: Int
         get() = nElementsValues.size
 
@@ -46,7 +50,7 @@ data class NClientsExperiment(
     val clientResponseRequestDelay: Duration,
     val nRequestsPerClient: Int,
     val conf: ExperimentConf,
-) : AbstractCollection<Pair<Int, (Arch) -> RunConf>>() {
+) : AbstractExperiment<Int>() {
     override val size: Int
         get() = nClientsValues.size
 
@@ -72,7 +76,7 @@ data class ClientResponseRequestDelayExperiment(
     val clientResponseRequestDelayValues: List<Duration>,
     val nRequestsPerClient: Int,
     val conf: ExperimentConf,
-) : AbstractCollection<Pair<Duration, (Arch) -> RunConf>>() {
+) : AbstractExperiment<Duration>() {
     override val size: Int
         get() = clientResponseRequestDelayValues.size
 
