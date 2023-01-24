@@ -7,8 +7,8 @@ import com.github.winteryuki.archbench.arch.ServerRequestHandler
 import com.github.winteryuki.archbench.arch.ServerTimeLogger
 import com.github.winteryuki.archbench.arch.async.SimpleAsyncClient
 import com.github.winteryuki.archbench.arch.async.SimpleAsyncServer
-import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingClient
 import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingServer
+import com.github.winteryuki.archbench.arch.nonblocking.SimpleNonblockingServer
 import com.github.winteryuki.archbench.lib.Endpoint
 import com.github.winteryuki.archbench.lib.Port
 
@@ -27,7 +27,11 @@ fun interface ClientFactory {
 enum class Arch(val serverFactory: ServerFactory, val clientFactory: ClientFactory) {
     Blocking(
         SimpleBlockingServer.Companion::invoke,
-        SimpleBlockingClient.Companion::invoke,
+        SimpleAsyncClient.Companion::invoke,
+    ),
+    Nonblocking(
+        SimpleNonblockingServer.Companion::invoke,
+        SimpleAsyncClient.Companion::invoke,
     ),
     Async(
         SimpleAsyncServer.Companion::invoke,
