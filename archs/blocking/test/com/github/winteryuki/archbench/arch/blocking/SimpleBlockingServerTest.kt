@@ -1,13 +1,13 @@
 package com.github.winteryuki.archbench.arch.blocking
 
-import com.github.winteryuku.archbench.arch.testing.AbstractArchTest
+import com.github.winteryuku.archbench.arch.testing.AbstractServerTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class BlockingArchTest : AbstractArchTest() {
+class SimpleBlockingServerTest : AbstractServerTest() {
     @BeforeEach
     fun beforeEach() {
         server = SimpleBlockingServer(serverPort, requestHandler = serverHandler)
