@@ -15,57 +15,63 @@ private const val PREFIX = "<><><><><><><><><><> "
 private fun main() {
     val conf = ExperimentConf()
     val dashes = "------------------"
-//    println("$dashes n elements $dashes")
-//    runNElements(conf)
+    println("$dashes n elements $dashes")
+    runNElements(conf)
     println("$dashes n clients $dashes")
     runNClients(conf)
-//    println("$dashes client delay $dashes")
-//    runClientDelay(conf)
+    println("$dashes client delay $dashes")
+    runClientDelay(conf)
 }
 
 private fun runNElements(conf: ExperimentConf) {
+    val nClients = 100
     val elements = NElementsExperiment(
-        nElementsValues = if (FAST) listOf(1000, 5000, 10000) else {
-            listOf(1000, 2000, 5000, 7000, 10000, 15000)
+        nElementsValues = if (FAST) listOf(1000, 5000) else {
+            listOf(1000, 2000, 5000, 10000, 15000, 25000)
         },
-        nClients = 300,
+        nClients = nClients,
         clientResponseRequestDelay = Duration.ZERO,
-        nRequestsPerClient = if (FAST) 1 else 10,
+        nRequestsPerClient = if (FAST) 1 else 2,
         conf = conf,
     )
     elements.execute(
         xLabel = "number of elements",
-        title = { tag -> "${tag.label} by elements" },
+        title = { "nClients=$nClients" },
         filename = { tag -> "nElements$tag.png" },
     )
 }
 
 private fun runNClients(conf: ExperimentConf) {
+    val nElements = 3000
     val clients = NClientsExperiment(
-        nElements = 10000,
-        nClientsValues = if (FAST) listOf(1, 10, 20) else listOf(1, 10, 50, 100, 150, 200, 250, 300),
+        nElements = nElements,
+        nClientsValues = if (FAST) listOf(1, 10, 20) else {
+            listOf(1, 10, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000)
+        },
         clientResponseRequestDelay = Duration.ZERO,
-        nRequestsPerClient = if (FAST) 1 else 10,
+        nRequestsPerClient = if (FAST) 1 else 5,
         conf = conf
     )
     clients.execute(
         xLabel = "number of clients",
-        title = { tag -> "${tag.label} by clients" },
+        title = { "nElements=$nElements" },
         filename = { tag -> "nClients$tag.png" },
     )
 }
 
 private fun runClientDelay(conf: ExperimentConf) {
+    val nElements = 10000
+    val nClients = 300
     val delays = ClientResponseRequestDelayExperiment(
-        nElements = if (FAST) 10000 else 100_000,
-        nClients = 2 * conf.nServerWorkerThreads,
-        clientResponseRequestDelayValues = listOf(0, 10, 20, 30).map { it.toDuration(DurationUnit.MILLISECONDS) },
+        nElements = nElements,
+        nClients = nClients,
+        clientResponseRequestDelayValues = (0..150 step 10).map { it.toDuration(DurationUnit.MILLISECONDS) },
         nRequestsPerClient = if (FAST) 1 else 3,
         conf = conf
     )
     delays.execute(
         xLabel = "client request response delay",
-        title = { tag -> "${tag.label} by delays" },
+        title = { "nElements=$nElements,nClients=$nClients" },
         filename = { tag -> "delays$tag.png" }
     )
 }
