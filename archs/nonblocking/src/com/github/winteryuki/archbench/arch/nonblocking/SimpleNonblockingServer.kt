@@ -46,7 +46,9 @@ class SimpleNonblockingServer<Request, Response>(
     private class ClientContext(
         @Volatile
         var request: RequestContext,
-        val response: ResponseContext
+        val response: ResponseContext,
+        @Volatile
+        var writeKey: SelectionKey? = null,
     )
 
     private sealed interface RequestContext {
@@ -69,7 +71,7 @@ class SimpleNonblockingServer<Request, Response>(
     private fun runReadSelection() {
         while (!Thread.currentThread().isInterrupted && readSelector.isOpen) {
             readSelector.select().let { nNewReadyChannels ->
-                logger.info { "Selected new ready channels: $nNewReadyChannels" }
+                logger.info { "Selected new ready to read channels: $nNewReadyChannels" }
             }
             val keyIter = readSelector.selectedKeys().iterator()
             while (keyIter.hasNext()) {
@@ -100,7 +102,15 @@ class SimpleNonblockingServer<Request, Response>(
         context: RequestContext.Init,
         key: SelectionKey
     ) = with(context) {
-        key.socketChannel.read(sizeBuffer).let { if (it == -1) return@with }
+        key.socketChannel.read(sizeBuffer).let {
+            if (it == -1) {
+                logger.info { "Client disconnected" }
+                key.clientContext.writeKey
+                    ?.cancel()
+                    ?: logger.error { "Failed to cancel client key: ${key.socketChannel.remoteAddress}" }
+                return@with
+            }
+        }
         if (sizeBuffer.hasRemaining()) return@with
         sizeBuffer.flip()
         val size = sizeBuffer.int
@@ -141,7 +151,7 @@ class SimpleNonblockingServer<Request, Response>(
     private fun runWriteSelection() {
         while (!Thread.currentThread().isInterrupted && writeSelector.isOpen) {
             writeSelector.select().let { nNewReadyChannels ->
-                logger.info { "Selected new ready channels: $nNewReadyChannels" }
+                logger.info { "Selected new ready to write channels: $nNewReadyChannels" }
             }
             val keyIter = writeSelector.selectedKeys().iterator()
             while (keyIter.hasNext()) {
@@ -149,14 +159,14 @@ class SimpleNonblockingServer<Request, Response>(
                 if (key.isWritable) {
                     val queue = key.clientContext.response.queue
                     while (queue.isNotEmpty()) {
-                        val buffer = queue.peek()
-                        requireNotNull(buffer)
+                        val buffer = queue.element()
                         key.socketChannel.write(buffer)
                         if (!buffer.hasRemaining()) {
                             queue.remove()
                         }
                         if (queue.isEmpty()) {
-                            key.cancel()
+                            // Optimization: unregister write channel if no data is available to write
+                            key.socketChannel.register(writeSelector, 0, key.clientContext)
                         }
                     }
                 } else {
@@ -165,9 +175,9 @@ class SimpleNonblockingServer<Request, Response>(
                 keyIter.remove()
             }
             while (writeChannelsToRegister.isNotEmpty()) {
-                val key = writeChannelsToRegister.remove()
-                requireNotNull(key)
-                key.socketChannel.register(writeSelector, SelectionKey.OP_WRITE, key.clientContext)
+                val readKey = writeChannelsToRegister.remove()
+                val key = readKey.socketChannel.register(writeSelector, SelectionKey.OP_WRITE, readKey.clientContext)
+                readKey.clientContext.writeKey = key
             }
         }
     }

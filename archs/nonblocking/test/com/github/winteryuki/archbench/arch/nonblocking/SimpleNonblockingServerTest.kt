@@ -2,14 +2,13 @@ package com.github.winteryuki.archbench.arch.nonblocking
 
 import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingClient
 import com.github.winteryuku.archbench.arch.testing.AbstractServerTest
-import kotlinx.coroutines.sync.Mutex
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class SimpleNonblockingServerTest : AbstractServerTest(mutexFactory = ::Mutex) {
+class SimpleNonblockingServerTest : AbstractServerTest() {
     @BeforeEach
     fun beforeEach() {
         server = SimpleNonblockingServer(serverPort, requestHandler = serverHandler)

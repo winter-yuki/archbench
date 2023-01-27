@@ -19,7 +19,7 @@ import java.util.concurrent.Executors
 import kotlin.random.Random
 import kotlin.test.assertEquals
 
-abstract class AbstractServerTest(mutexFactory: () -> Mutex? = { null }) {
+abstract class AbstractServerTest(val nIterations: Int = 30_000, mutexFactory: () -> Mutex? = { null }) {
     @Serializable
     data class Request(val cmd: String, val id: Int, val data: Int)
 
@@ -85,9 +85,8 @@ abstract class AbstractServerTest(mutexFactory: () -> Mutex? = { null }) {
         val responses1 = mutableListOf<Response>()
         val responses2 = mutableListOf<Response>()
         val responses3 = mutableListOf<Response>()
-        val n = 30
-        latch = Latch(n)
-        repeat(n) { id ->
+        latch = Latch(nIterations)
+        repeat(nIterations) { id ->
             val (cmd, f) = when (rnd.nextInt(2)) {
                 0 -> "p" to fun(x: Int): Int = x + 1
                 1 -> "m" to fun(x: Int): Int = x - 1
