@@ -20,6 +20,9 @@ import java.nio.channels.AsynchronousCloseException
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
+import java.util.*
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -28,12 +31,19 @@ class SimpleAsyncServer<Request, Response>(
     private val requestDeserializer: DeserializationStrategy<Request>,
     private val responseSerializer: SerializationStrategy<Response>,
     private val timeLogger: ServerTimeLogger = ServerTimeLogger(),
-    private val requestHandler: ServerRequestHandler<Request, Response>
+    private val serverRequestHandler: ServerRequestHandler<Request, Response>
 ) : AbstractServer(SimpleAsyncServer::class) {
     private val serverChannel = AsynchronousServerSocketChannel.open().bind(port.inetSocketAddress)
+    private val responseQueue: Queue<ResponseContext> = ConcurrentLinkedQueue()
+    private val nResponsesInProgress = AtomicInteger(0)
+
+    private val connectionHandler = ConnectionHandler()
+    private val requestInitHandler = RequestInitHandler()
+    private val requestHandler = RequestHandler()
+    private val responseHandler = ResponseHandler()
 
     override fun run() {
-        serverChannel.accept(Unit, ConnectionHandler())
+        serverChannel.accept(Unit, connectionHandler)
     }
 
     override fun close() {
@@ -46,7 +56,7 @@ class SimpleAsyncServer<Request, Response>(
             serverChannel.accept(attachment, this)
             val buffer = ByteBuffer.allocate(Int.SIZE_BYTES)
             val context = RequestInitContext(channel = result, messageSizeBuffer = buffer)
-            result.read(buffer, context, RequestInitHandler())
+            result.read(buffer, context, requestInitHandler)
         }
 
         override fun failed(exc: Throwable, attachment: Unit) {
@@ -81,7 +91,7 @@ class SimpleAsyncServer<Request, Response>(
 
             val buffer = ByteBuffer.allocate(size)
             val context = RequestContext(attachment, this@RequestInitHandler, channel, messageBuffer = buffer)
-            channel.read(buffer, context, RequestHandler())
+            channel.read(buffer, context, requestHandler)
         }
 
         override fun failed(exc: Throwable, attachment: RequestInitContext) {
@@ -110,16 +120,20 @@ class SimpleAsyncServer<Request, Response>(
             val ip = IpAddress(channel.remoteAddress as InetSocketAddress)
             val context = ServerRequestHandler.HandlingContext(ip)
             val startTimeMs = System.currentTimeMillis()
-            with(requestHandler) {
+            with(serverRequestHandler) {
                 context.handleRequest(request) { response ->
                     val elapsed = (System.currentTimeMillis() - startTimeMs).toDuration(DurationUnit.MILLISECONDS)
                     timeLogger.logRequestProcessingDuration(elapsed)
 
                     val buffer = ProtoBuf.encodeDelimitedToBuffer(responseSerializer, response)
                     logger.info { "Sending response (totalSize=${buffer.limit()})" }
-                    val responseContext = ResponseContext(responseBuffer = buffer, channel = channel)
-                    // TODO request multiplication (send responses sequentially)
-                    channel.write(buffer, responseContext, ResponseHandler())
+                    responseQueue.add(ResponseContext(responseBuffer = buffer, channel = channel))
+
+                    val nInProgress = nResponsesInProgress.getAndIncrement()
+                    if (nInProgress == 0) {
+                        val responseContext = responseQueue.remove()
+                        responseContext.channel.write(responseContext.responseBuffer, responseContext, responseHandler)
+                    }
                 }
             }
             channel.read(initContext.messageSizeBuffer, initContext, initHandler)
@@ -141,6 +155,11 @@ class SimpleAsyncServer<Request, Response>(
                 channel.write(responseBuffer, attachment, this@ResponseHandler)
             } else {
                 logger.info { "Response sent (totalSize=${responseBuffer.position()})" }
+                val nResponsesRemaining = nResponsesInProgress.decrementAndGet()
+                if (nResponsesRemaining != 0) {
+                    val responseContext = responseQueue.remove()
+                    responseContext.channel.write(responseContext.responseBuffer, responseContext, responseHandler)
+                }
             }
         }
 

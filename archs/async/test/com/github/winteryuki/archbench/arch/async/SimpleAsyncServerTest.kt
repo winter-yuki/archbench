@@ -1,14 +1,13 @@
 package com.github.winteryuki.archbench.arch.async
 
 import com.github.winteryuku.archbench.arch.testing.AbstractServerTest
-import kotlinx.coroutines.sync.Mutex
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class SimpleAsyncServerTest : AbstractServerTest(mutexFactory = ::Mutex) {
+class SimpleAsyncServerTest : AbstractServerTest() {
     @BeforeEach
     fun beforeEach() {
         server = SimpleAsyncServer(serverPort, requestHandler = serverHandler)
