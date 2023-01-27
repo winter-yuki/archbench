@@ -1,7 +1,8 @@
 plugins {
     java
-    kotlin("jvm") version "1.7.21" apply false
-    kotlin("plugin.serialization") version "1.7.21" apply false
+    kotlin("jvm") version "1.7.20" apply false
+    kotlin("plugin.serialization") version "1.7.20" apply false
+    id("org.jetbrains.compose") apply false
 }
 
 group = "com.github.winteryuki.archbench"

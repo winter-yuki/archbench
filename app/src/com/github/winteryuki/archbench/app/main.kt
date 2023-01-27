@@ -1,12 +1,12 @@
 package com.github.winteryuki.archbench.app
 
-import com.github.winteryuki.archbench.runner.MetricTag
-import com.github.winteryuki.archbench.runner.MetricsStorage
-import kotlinx.serialization.Serializable
-import kotlin.time.Duration
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.singleWindowApplication
 
-@Serializable
-data class MetricsSnapshot(val times: Map<MetricTag, Duration>) {
-    constructor(metricsStorage: MetricsStorage) : this(
-        MetricTag.values().associateWith { tag -> metricsStorage.average(tag) })
+fun main() = singleWindowApplication(
+    title = "Code Viewer",
+    state = WindowState(width = 1280.dp, height = 768.dp),
+) {
+    // TODO
 }
