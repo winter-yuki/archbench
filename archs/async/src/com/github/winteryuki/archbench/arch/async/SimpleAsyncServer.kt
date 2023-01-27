@@ -34,8 +34,6 @@ class SimpleAsyncServer<Request, Response>(
     private val serverRequestHandler: ServerRequestHandler<Request, Response>
 ) : AbstractServer(SimpleAsyncServer::class) {
     private val serverChannel = AsynchronousServerSocketChannel.open().bind(port.inetSocketAddress)
-    private val responseQueue: Queue<ResponseContext> = ConcurrentLinkedQueue()
-    private val nResponsesInProgress = AtomicInteger(0)
 
     private val connectionHandler = ConnectionHandler()
     private val requestInitHandler = RequestInitHandler()
@@ -51,11 +49,20 @@ class SimpleAsyncServer<Request, Response>(
         serverChannel.close()
     }
 
+    private class ConnectionContext(
+        val nResponsesInProgress: AtomicInteger = AtomicInteger(0),
+        val responseQueue: Queue<ResponseContext> = ConcurrentLinkedQueue(),
+    )
+
     private inner class ConnectionHandler : CompletionHandler<AsynchronousSocketChannel, Unit> {
         override fun completed(result: AsynchronousSocketChannel, attachment: Unit) {
             serverChannel.accept(attachment, this)
             val buffer = ByteBuffer.allocate(Int.SIZE_BYTES)
-            val context = RequestInitContext(channel = result, messageSizeBuffer = buffer)
+            val context = RequestInitContext(
+                channel = result,
+                messageSizeBuffer = buffer,
+                connectionContext = ConnectionContext()
+            )
             result.read(buffer, context, requestInitHandler)
         }
 
@@ -71,6 +78,7 @@ class SimpleAsyncServer<Request, Response>(
     private class RequestInitContext(
         val channel: AsynchronousSocketChannel,
         val messageSizeBuffer: ByteBuffer,
+        val connectionContext: ConnectionContext,
     )
 
     private inner class RequestInitHandler : CompletionHandler<Int, RequestInitContext> {
@@ -90,7 +98,7 @@ class SimpleAsyncServer<Request, Response>(
             messageSizeBuffer.clear()
 
             val buffer = ByteBuffer.allocate(size)
-            val context = RequestContext(attachment, this@RequestInitHandler, channel, messageBuffer = buffer)
+            val context = RequestContext(attachment, this@RequestInitHandler, channel, buffer, connectionContext)
             channel.read(buffer, context, requestHandler)
         }
 
@@ -104,6 +112,7 @@ class SimpleAsyncServer<Request, Response>(
         val initHandler: RequestInitHandler,
         val channel: AsynchronousSocketChannel,
         val messageBuffer: ByteBuffer,
+        val connectionContext: ConnectionContext,
     )
 
     private inner class RequestHandler : CompletionHandler<Int, RequestContext> {
@@ -125,14 +134,15 @@ class SimpleAsyncServer<Request, Response>(
                     val elapsed = (System.currentTimeMillis() - startTimeMs).toDuration(DurationUnit.MILLISECONDS)
                     timeLogger.logRequestProcessingDuration(elapsed)
 
-                    val buffer = ProtoBuf.encodeDelimitedToBuffer(responseSerializer, response)
-                    logger.info { "Sending response (totalSize=${buffer.limit()})" }
-                    responseQueue.add(ResponseContext(responseBuffer = buffer, channel = channel))
+                    val responseBuffer = ProtoBuf.encodeDelimitedToBuffer(responseSerializer, response)
+                    logger.info { "Sending response (totalSize=${responseBuffer.limit()})" }
+                    val newResponseContext = ResponseContext(channel, responseBuffer, connectionContext)
+                    connectionContext.responseQueue.add(newResponseContext)
 
-                    val nInProgress = nResponsesInProgress.getAndIncrement()
+                    val nInProgress = connectionContext.nResponsesInProgress.getAndIncrement()
                     if (nInProgress == 0) {
-                        val responseContext = responseQueue.remove()
-                        responseContext.channel.write(responseContext.responseBuffer, responseContext, responseHandler)
+                        val responseContext = connectionContext.responseQueue.remove()
+                        channel.write(responseContext.responseBuffer, responseContext, responseHandler)
                     }
                 }
             }
@@ -147,6 +157,7 @@ class SimpleAsyncServer<Request, Response>(
     private class ResponseContext(
         val channel: AsynchronousSocketChannel,
         val responseBuffer: ByteBuffer,
+        val connectionContext: ConnectionContext,
     )
 
     private inner class ResponseHandler : CompletionHandler<Int, ResponseContext> {
@@ -155,10 +166,10 @@ class SimpleAsyncServer<Request, Response>(
                 channel.write(responseBuffer, attachment, this@ResponseHandler)
             } else {
                 logger.info { "Response sent (totalSize=${responseBuffer.position()})" }
-                val nResponsesRemaining = nResponsesInProgress.decrementAndGet()
+                val nResponsesRemaining = connectionContext.nResponsesInProgress.decrementAndGet()
                 if (nResponsesRemaining != 0) {
-                    val responseContext = responseQueue.remove()
-                    responseContext.channel.write(responseContext.responseBuffer, responseContext, responseHandler)
+                    val responseContext = connectionContext.responseQueue.remove()
+                    channel.write(responseContext.responseBuffer, responseContext, responseHandler)
                 }
             }
         }
