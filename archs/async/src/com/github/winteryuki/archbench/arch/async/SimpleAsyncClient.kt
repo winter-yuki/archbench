@@ -15,6 +15,7 @@ import mu.KLogger
 import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
+import java.util.concurrent.atomic.AtomicInteger
 
 class SimpleAsyncClient<Request, Response>(
     private val endpoint: Endpoint,
@@ -22,6 +23,7 @@ class SimpleAsyncClient<Request, Response>(
     private val responseDeserializer: DeserializationStrategy<Response>,
     private val handler: ClientResponseHandler<Response>
 ) : Client<Request> {
+    private val nResponsesInProgress = AtomicInteger(0)
     private val socketChannel = AsynchronousSocketChannel.open()
     private val connected by lazy { socketChannel.connect(endpoint.inetSocketAddress) }
 
@@ -48,8 +50,10 @@ class SimpleAsyncClient<Request, Response>(
             logger.info { "Request sent (totalSize=${requestBuffer.position()})" }
             val buffer = ByteBuffer.allocate(Int.SIZE_BYTES)
             val context = ResponseInitContext(buffer)
-            // TODO request multiplication (receive responses sequentially)
-            socketChannel.read(buffer, context, ResponseInitHandler())
+            val nInProgress = nResponsesInProgress.getAndIncrement()
+            if (nInProgress == 0) {
+                socketChannel.read(buffer, context, ResponseInitHandler())
+            }
         }
 
         override fun failed(exc: Throwable, attachment: RequestContext) {
@@ -71,9 +75,10 @@ class SimpleAsyncClient<Request, Response>(
             responseSizeBuffer.flip()
             val size = responseSizeBuffer.int
             logger.info { "Response size received (size=$size)" }
+            responseSizeBuffer.clear()
 
             val buffer = ByteBuffer.allocate(size)
-            val context = ResponseContext(buffer)
+            val context = ResponseContext(attachment, this@ResponseInitHandler, buffer)
             socketChannel.read(buffer, context, ResponseHandler())
         }
 
@@ -82,8 +87,10 @@ class SimpleAsyncClient<Request, Response>(
         }
     }
 
-    private class ResponseContext(
-        val responseBuffer: ByteBuffer
+    private inner class ResponseContext(
+        val initContext: ResponseInitContext,
+        val initHandler: ResponseInitHandler,
+        val responseBuffer: ByteBuffer,
     )
 
     private inner class ResponseHandler : CompletionHandler<Int, ResponseContext> {
@@ -99,6 +106,11 @@ class SimpleAsyncClient<Request, Response>(
             val response = ProtoBuf.decodeFromByteArray(responseDeserializer, responseBuffer.array())
             val context = ClientResponseHandler.HandlingContext(endpoint)
             with(handler) { context.handleResponse(response) }
+
+            val nRequestsRemaining = nResponsesInProgress.decrementAndGet()
+            if (nRequestsRemaining != 0) {
+                socketChannel.read(initContext.responseSizeBuffer, initContext, initHandler)
+            }
         }
 
         override fun failed(exc: Throwable, attachment: ResponseContext) {

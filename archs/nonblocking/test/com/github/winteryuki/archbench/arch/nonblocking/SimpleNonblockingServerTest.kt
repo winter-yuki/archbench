@@ -1,6 +1,6 @@
 package com.github.winteryuki.archbench.arch.nonblocking
 
-import com.github.winteryuki.archbench.arch.blocking.SimpleBlockingClient
+import com.github.winteryuki.archbench.arch.async.SimpleAsyncClient
 import com.github.winteryuku.archbench.arch.testing.AbstractServerTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -14,9 +14,9 @@ class SimpleNonblockingServerTest : AbstractServerTest() {
         server = SimpleNonblockingServer(serverPort, requestHandler = serverHandler)
         server.start()
 
-        client1 = SimpleBlockingClient(endpoint, handler1)
-        client2 = SimpleBlockingClient(endpoint, handler2)
-        client3 = SimpleBlockingClient(endpoint, handler3)
+        client1 = SimpleAsyncClient(endpoint, handler1)
+        client2 = SimpleAsyncClient(endpoint, handler2)
+        client3 = SimpleAsyncClient(endpoint, handler3)
     }
 
     @AfterEach

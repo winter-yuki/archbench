@@ -1,3 +1,3 @@
 dependencies {
-    testImplementation(project(":archs:blocking")) // To use blocking client
+    testImplementation(project(":archs:async")) // To use client
 }
